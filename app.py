@@ -35,7 +35,7 @@ def get_company_info(company_name):
 @st.cache_data
 def check_layoff_status(company_name):
     try:
-        url = "https://layoffs.fyi/layoffs.csv"
+        url = "https://github.com/layoffs/layoffs-data/raw/master/layoffs.csv"
         df = pd.read_csv(url)
 
         df['Company'] = df['Company'].astype(str).str.lower().str.strip()
