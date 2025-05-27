@@ -5,7 +5,7 @@ import pandas as pd
 st.title("📊 Career Move Evaluator")
 
 with st.form("career_form"):
-    target_company = st.text_input("Target Company", "Rippling")
+    target_company = st.text_input("Target Company", "Stripe")
     role = st.text_input("Role Title", "Product Manager")
     current_company = st.text_input("Your Current Company", "TCS")
     submitted = st.form_submit_button("Evaluate")
@@ -37,17 +37,20 @@ def check_layoff_status(company_name):
     try:
         url = "https://layoffs.fyi/layoffs.csv"
         df = pd.read_csv(url)
-        df['Company'] = df['Company'].str.lower()
-        matches = df[df['Company'].str.lower().str.contains(company_name.lower(), na=False)]
+
+        df['Company'] = df['Company'].astype(str).str.lower().str.strip()
+        matches = df[df['Company'].str.contains(company_name.lower(), na=False)]
+
         return matches
     except Exception as e:
+        st.error(f"Error loading layoff data: {e}")
         return None
 
 if submitted:
     st.write("🔍 Fetching details for:", target_company)
 
+    # Company Info from Clearbit
     company_info = get_company_info(lookup_name)
-
     if company_info:
         st.subheader("🏢 Company Info")
         st.write("**Name:**", company_info["name"])
@@ -56,10 +59,18 @@ if submitted:
     else:
         st.error("❌ Could not fetch company info.")
 
+    # Layoff Info
     layoffs = check_layoff_status(lookup_name)
-
     if layoffs is not None and not layoffs.empty:
         st.warning("⚠️ Layoffs reported")
         st.dataframe(layoffs[['Company', 'Date', 'Location', 'Laid Off Count']])
     else:
         st.success("✅ No layoffs found in recent records.")
+
+    # Optional debug - show all company names that match
+    st.write("🔎 Debug: Companies matched for layoffs")
+    st.write(layoffs['Company'].unique() if layoffs is not None else "No matches")
+
+    # Optional debug - show a sample of known companies from the CSV
+    st.write("🗂️ Sample from Layoffs.fyi")
+    st.dataframe(pd.read_csv("https://layoffs.fyi/layoffs.csv")[['Company', 'Date']].drop_duplicates().head(20))
