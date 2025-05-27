@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import re
 
 # Set page title
 st.set_page_config(page_title="Career Move Evaluator", layout="centered")
@@ -19,6 +20,12 @@ def load_layoff_data():
         return pd.DataFrame()
 
 layoffs = load_layoff_data()
+
+# Helper function to shorten AI text verdict
+def summarize_verdict(long_text, max_sentences=3):
+    sentences = re.split(r'(?<=[.!?]) +', long_text.strip())
+    short_text = ' '.join(sentences[:max_sentences])
+    return short_text
 
 # User inputs
 st.subheader("Compare Your Career Move")
@@ -61,11 +68,12 @@ Is this a good move? Explain clearly and concisely in a supportive but strategic
             response.raise_for_status()
             generated = response.json()
             if isinstance(generated, list):
-                return generated[0]["generated_text"].split("###")[-1].strip()
+                text = generated[0]["generated_text"].split("###")[-1].strip()
             elif "generated_text" in generated:
-                return generated["generated_text"].strip()
+                text = generated["generated_text"].strip()
             else:
-                return str(generated)
+                text = str(generated)
+            return summarize_verdict(text)
         except Exception as e:
             return f"❌ Error from Hugging Face: {e}"
 
