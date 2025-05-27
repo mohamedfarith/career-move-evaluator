@@ -10,6 +10,7 @@ with st.form("career_form"):
     current_company = st.text_input("Your Current Company", "TCS")
     submitted = st.form_submit_button("Evaluate")
 
+# Some common company name aliases to improve lookup
 aliases = {
     "meta": "facebook",
     "fb": "facebook",
@@ -34,11 +35,7 @@ def check_layoff_status(company_name):
     try:
         url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
         df = pd.read_csv(url, encoding='latin1', sep=';', on_bad_lines='skip')
-
-        # Strip quotes from column names
         df.columns = [col.strip('"') for col in df.columns]
-
-        # Normalize company column
         df['company'] = df['company'].astype(str).str.lower().str.strip()
 
         matches = df[df['company'].str.contains(company_name.lower(), na=False)]
@@ -46,7 +43,6 @@ def check_layoff_status(company_name):
     except Exception as e:
         st.error(f"Error loading layoff data: {e}")
         return None
-
 
 if submitted:
     st.write("🔍 Fetching details for:", target_company)
@@ -63,12 +59,6 @@ if submitted:
     layoffs = check_layoff_status(lookup_name)
     if layoffs is not None and not layoffs.empty:
         st.warning("⚠️ Layoffs reported")
-        st.dataframe(layoffs[['Company', 'Date', 'Location', 'Laid Off Count']])
+        st.dataframe(layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
     else:
         st.success("✅ No layoffs found in recent records.")
-
-    if layoffs is not None:
-        st.write("🔎 Debug: Companies matched for layoffs")
-        st.write(layoffs['Company'].unique())
-    else:
-        st.write("No layoff data matched.")
