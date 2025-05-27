@@ -2,87 +2,89 @@ import streamlit as st
 import requests
 import pandas as pd
 
-st.title("Career Move Evaluator (Hugging Face)")
+st.set_page_config(page_title="Career Move Evaluator", layout="centered")
+st.title("📊 Career Move Evaluator")
 
-# ===== User inputs form =====
+# Form for user inputs
 with st.form("career_form"):
-    target_company = st.text_input("Target Company", "Rippling")
-    role = st.text_input("Role Title", "Product Manager")
-    current_company = st.text_input("Your Current Company", "TCS")
+    target_company = st.text_input("🎯 Target Company", "Rippling")
+    role = st.text_input("💼 Role Title", "Product Manager")
+    current_company = st.text_input("🏢 Your Current Company", "TCS")
     submitted = st.form_submit_button("Evaluate")
 
-# ===== Hugging Face API Token =====
-HF_API_TOKEN = "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"  # Replace with your HF API token
-
-# ===== Function to get company info from Clearbit =====
+# 1. Clearbit API for company info
 def get_company_info(company_name):
     clearbit_url = f"https://autocomplete.clearbit.com/v1/companies/suggest?query={company_name}"
     response = requests.get(clearbit_url)
     if response.status_code == 200 and response.json():
-        return response.json()[0]  # Return top suggestion
+        return response.json()[0]
     else:
         return None
 
-# ===== Function to call Hugging Face summarization model =====
-def call_hf_summarization(prompt):
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+# 2. Layoff dataset from GitHub
+@st.cache_data
+def check_layoff_status(company_name):
+    try:
+        url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
+        df = pd.read_csv(url, encoding='latin1', delimiter=';')
+        df['company'] = df['company'].str.lower()
+        matches = df[df['company'].str.contains(company_name.lower(), na=False)]
+        return matches
+    except Exception as e:
+        st.error(f"Error loading layoff data: {e}")
+        return None
+
+# 3. Hugging Face AI model (free)
+def call_huggingface_ai(prompt):
+    api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+    headers = {"Authorization": f"Bearer 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"}  # Replace this with your Hugging Face token
     payload = {"inputs": prompt}
-    response = requests.post(API_URL, headers=headers, json=payload)
-    if response.status_code == 200:
-        result = response.json()
-        if isinstance(result, list) and 'summary_text' in result[0]:
-            return result[0]['summary_text']
+
+    try:
+        response = requests.post(api_url, headers=headers, json=payload)
+        if response.status_code == 200:
+            return response.json()[0]["generated_text"]
         else:
-            return "Sorry, could not generate summary."
-    else:
-        return f"Error: {response.status_code} - {response.text}"
+            st.error(f"❌ Error from Hugging Face: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        st.error(f"❌ API call failed: {e}")
+        return None
 
-# ===== Load layoffs dataset from cleaned CSV (GitHub raw URL) =====
-@st.cache_data(ttl=86400)  # cache for 1 day
-def load_layoffs_data():
-    url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
-    df = pd.read_csv(url, sep=';', encoding='latin1')
-    return df
-
-# ===== Check layoffs for the target company =====
-def check_layoffs(company_name, df):
-    df['company'] = df['company'].str.lower()
-    filtered = df[df['company'].str.contains(company_name.lower(), na=False)]
-    return filtered
-
+# Run evaluation logic
 if submitted:
-    st.write(f"Evaluating career move to **{target_company}** as **{role}** from **{current_company}**...")
-
-    # Get company info from Clearbit
+    st.markdown("---")
+    st.subheader("🔍 Company Overview")
     company_info = get_company_info(target_company)
+
     if company_info:
-        st.subheader("Company Info")
-        st.write(f"**Name:** {company_info.get('name', 'N/A')}")
-        st.write(f"**Domain:** {company_info.get('domain', 'N/A')}")
-        if company_info.get('logo'):
-            st.image(company_info['logo'], width=100)
+        st.write("**Name:**", company_info["name"])
+        st.write("**Domain:**", company_info["domain"])
+        st.image(company_info["logo"], width=100)
     else:
-        st.warning("No company info found.")
+        st.error("Company details not found.")
 
-    # Load layoffs data and check layoffs for target company
-    layoffs_df = load_layoffs_data()
-    layoffs_found = check_layoffs(target_company, layoffs_df)
-    if not layoffs_found.empty:
-        st.warning("⚠️ Layoffs reported recently:")
-        st.dataframe(layoffs_found[['company', 'layoff_date', 'location', 'total_laid_off']])
+    st.markdown("---")
+    st.subheader("📉 Layoff Records")
+    layoffs = check_layoff_status(target_company)
+
+    if layoffs is not None and not layoffs.empty:
+        st.warning("⚠️ Recent layoffs reported")
+        st.dataframe(layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
     else:
-        st.success("✅ No layoffs found in recent records.")
+        st.success("✅ No layoffs found in public records.")
 
-    # Build prompt for summarization
-    prompt = (
+    st.markdown("---")
+    st.subheader("🤖 AI Career Move Verdict")
+
+    ai_prompt = (
+        f"The person currently works at {current_company}. "
         f"Here's some information about the company {target_company}. "
-        f"The role is {role}. The person currently works at {current_company}. "
-        "Considering the funding stage, layoffs, team size, culture, and growth risks, "
-        "please provide a strategic but friendly advice on whether this is a good career move."
+        f"The role is {role}. "
+        f"Considering the funding stage, layoffs, team size, culture, and growth risks, "
+        f"please provide a strategic but friendly advice on whether this is a good career move."
     )
 
-    # Call Hugging Face summarization model
-    st.subheader("AI Career Move Analysis")
-    analysis = call_hf_summarization(prompt)
-    st.write(analysis)
+    verdict = call_huggingface_ai(ai_prompt)
+    if verdict:
+        st.success(verdict)
