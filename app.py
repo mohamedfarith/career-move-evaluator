@@ -2,14 +2,13 @@ import streamlit as st
 import requests
 import pandas as pd
 import openai
-import os
 
-st.title("🚀 Career Move Evaluator")
+st.title("Career Move Evaluator")
 
-# OpenAI API key should be set as Streamlit Secret or env variable for deployment safety
-openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+# Hardcode your OpenAI API key here (replace with your actual key)
+OPENAI_API_KEY = "sk-xxxx"  # <-- Replace this with your OpenAI key!
 
-LAYOFFS_CSV_URL = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
+openai.api_key = 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
 
 with st.form("career_form"):
     target_company = st.text_input("Target Company", "Rippling")
@@ -18,31 +17,25 @@ with st.form("career_form"):
     submitted = st.form_submit_button("Evaluate")
 
 def get_company_info(company_name):
-    url = f"https://autocomplete.clearbit.com/v1/companies/suggest?query={company_name}"
-    try:
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200 and res.json():
-            return res.json()[0]
-    except:
-        pass
+    clearbit_url = f"https://autocomplete.clearbit.com/v1/companies/suggest?query={company_name}"
+    response = requests.get(clearbit_url)
+    if response.status_code == 200 and response.json():
+        return response.json()[0]
     return None
 
-@st.cache_data(show_spinner=False)
-def load_layoffs_data():
-    try:
-        df = pd.read_csv(LAYOFFS_CSV_URL, sep=';', encoding='latin1')
-        # Normalize columns: lowercase and strip quotes/spaces
-        df.columns = [col.strip().lower().replace('"','').replace(' ', '_') for col in df.columns]
-        return df
-    except Exception as e:
-        st.error(f"Error loading layoff data: {e}")
-        return None
+@st.cache_data
+def load_layoff_data():
+    url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
+    df = pd.read_csv(url, sep=';', encoding='latin1')
+    df.columns = [c.strip('"').strip() for c in df.columns]
+    df['company'] = df['company'].str.lower()
+    return df
 
-def check_layoffs(company_name, layoffs_df):
-    if layoffs_df is None:
-        return None
-    comp = company_name.lower()
-    filtered = layoffs_df[layoffs_df['company'].str.lower().str.contains(comp, na=False)]
+def check_layoff_status(company_name, df):
+    if df is None:
+        return pd.DataFrame()
+    company_name = company_name.lower()
+    filtered = df[df['company'].str.contains(company_name, na=False)]
     return filtered
 
 def get_ai_verdict(company_info, layoffs_df, current_company, target_role):
@@ -90,30 +83,27 @@ Please provide a friendly but strategic explanation with an overall verdict.
     return verdict
 
 if submitted:
-    st.write(f"### Searching for company info on '{target_company}'...")
-    company_info = get_company_info(target_company)
+    st.write(f"Fetching details for: **{target_company}**")
 
+    company_info = get_company_info(target_company)
     if company_info:
         st.subheader("Company Info")
-        st.write(f"**Name:** {company_info.get('name', 'N/A')}")
-        st.write(f"**Domain:** {company_info.get('domain', 'N/A')}")
-        if company_info.get("logo"):
-            st.image(company_info["logo"], width=100)
+        st.write("**Name:**", company_info["name"])
+        st.write("**Domain:**", company_info["domain"])
+        st.image(company_info["logo"], width=100)
     else:
         st.error("Could not fetch company info.")
+        st.stop()
 
-    st.write("### Checking layoffs data...")
-    layoffs_df = load_layoffs_data()
-    layoffs = check_layoffs(target_company, layoffs_df)
+    layoffs_df = load_layoff_data()
+    layoffs = check_layoff_status(target_company, layoffs_df)
 
-    if layoffs is not None and not layoffs.empty:
+    if not layoffs.empty:
         st.warning("⚠️ Layoffs reported")
         st.dataframe(layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
     else:
         st.success("✅ No layoffs found in recent records.")
 
-    if company_info:
-        st.write("### Analyzing career move with AI...")
-        verdict = get_ai_verdict(company_info, layoffs, current_company, role)
-        st.subheader("🤖 AI Career Move Verdict")
-        st.write(verdict)
+    verdict = get_ai_verdict(company_info, layoffs, current_company, role)
+    st.subheader("AI Career Move Evaluation")
+    st.write(verdict)
