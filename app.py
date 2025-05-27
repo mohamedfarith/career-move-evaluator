@@ -1,23 +1,20 @@
 import streamlit as st
 import requests
 import pandas as pd
-from openai import OpenAI
 
-# ======= Add your OpenAI API key here =======
-OPENAI_API_KEY = "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"
+st.title("Career Move Evaluator (Hugging Face)")
 
-# Instantiate OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-st.title("Career Move Evaluator")
-
+# ===== User inputs form =====
 with st.form("career_form"):
     target_company = st.text_input("Target Company", "Rippling")
     role = st.text_input("Role Title", "Product Manager")
     current_company = st.text_input("Your Current Company", "TCS")
     submitted = st.form_submit_button("Evaluate")
 
-# Function to get company data from Clearbit autocomplete API
+# ===== Hugging Face API Token =====
+HF_API_TOKEN = "hf_your_token_here"  # Replace with your HF API token
+
+# ===== Function to get company info from Clearbit =====
 def get_company_info(company_name):
     clearbit_url = f"https://autocomplete.clearbit.com/v1/companies/suggest?query={company_name}"
     response = requests.get(clearbit_url)
@@ -26,100 +23,66 @@ def get_company_info(company_name):
     else:
         return None
 
-# Function to load layoffs data from GitHub repo CSV (semicolon delimited)
-@st.cache_data
+# ===== Function to call Hugging Face summarization model =====
+def call_hf_summarization(prompt):
+    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+    API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+    payload = {"inputs": prompt}
+    response = requests.post(API_URL, headers=headers, json=payload)
+    if response.status_code == 200:
+        result = response.json()
+        if isinstance(result, list) and 'summary_text' in result[0]:
+            return result[0]['summary_text']
+        else:
+            return "Sorry, could not generate summary."
+    else:
+        return f"Error: {response.status_code} - {response.text}"
+
+# ===== Load layoffs dataset from cleaned CSV (GitHub raw URL) =====
+@st.cache_data(ttl=86400)  # cache for 1 day
 def load_layoffs_data():
-    url = "https://github.com/m0rningLight/Data_Analysis--Layoffs_Dataset/raw/main/data/layoffs_cleaned.csv"
-    try:
-        df = pd.read_csv(url, delimiter=";", encoding="latin1")
-        # Clean columns and lowercase for search
-        df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
-        return df
-    except Exception as e:
-        st.error(f"Error loading layoff data: {e}")
-        return pd.DataFrame()
+    url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
+    df = pd.read_csv(url, sep=';', encoding='latin1')
+    return df
 
-# Function to check layoffs for a company
-def check_layoff_status(company_name, df):
-    if df.empty:
-        return pd.DataFrame()
-    matches = df[df['company'].str.lower().str.contains(company_name.lower(), na=False)]
-    return matches
-
-# Function to get AI verdict from OpenAI
-def get_ai_verdict(company_info, layoffs_df, current_company, target_role):
-    funding = "Unknown"
-    if company_info and "metrics" in company_info:
-        metrics = company_info["metrics"]
-        if metrics.get("raised"):
-            funding = f"${metrics['raised']:,}" if isinstance(metrics['raised'], (int,float)) else metrics['raised']
-        elif metrics.get("funding"):
-            funding = str(metrics['funding'])
-
-    layoffs_count = 0
-    last_layoff_date = "N/A"
-    if layoffs_df is not None and not layoffs_df.empty:
-        layoffs_count = layoffs_df['total_laid_off'].sum()
-        last_layoff_date = layoffs_df['layoff_date'].max()
-
-    prompt = f"""
-You are a career advisor bot.
-
-Here is data about a company and role:
-
-Company: {company_info['name'] if company_info else 'Unknown'}
-Funding: {funding}
-Layoffs: {layoffs_count} people, last on {last_layoff_date}
-Role applied for: {target_role}
-Current company: {current_company}
-
-Based on funding, layoffs, and risk factors, is this a good career move for someone currently working at {current_company}?
-
-Please provide a friendly but strategic explanation with an overall verdict.
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=300,
-            temperature=0.7,
-        )
-        verdict = response.choices[0].message.content.strip()
-    except Exception as e:
-        verdict = f"Error calling OpenAI API: {e}"
-
-    return verdict
+# ===== Check layoffs for the target company =====
+def check_layoffs(company_name, df):
+    df['company'] = df['company'].str.lower()
+    filtered = df[df['company'].str.contains(company_name.lower(), na=False)]
+    return filtered
 
 if submitted:
-    st.write(f"Fetching details for: **{target_company}**")
+    st.write(f"Evaluating career move to **{target_company}** as **{role}** from **{current_company}**...")
 
-    # Step 1: Get company info
+    # Get company info from Clearbit
     company_info = get_company_info(target_company)
     if company_info:
         st.subheader("Company Info")
-        st.write("**Name:**", company_info.get("name", "N/A"))
-        st.write("**Domain:**", company_info.get("domain", "N/A"))
-        st.image(company_info.get("logo", ""), width=100)
+        st.write(f"**Name:** {company_info.get('name', 'N/A')}")
+        st.write(f"**Domain:** {company_info.get('domain', 'N/A')}")
+        if company_info.get('logo'):
+            st.image(company_info['logo'], width=100)
     else:
-        st.error("Could not fetch company info.")
-        company_info = None
+        st.warning("No company info found.")
 
-    # Step 2: Load layoffs data and filter
+    # Load layoffs data and check layoffs for target company
     layoffs_df = load_layoffs_data()
-    company_layoffs = check_layoff_status(target_company, layoffs_df)
-
-    if not company_layoffs.empty:
-        st.warning("⚠️ Layoffs reported")
-        st.dataframe(company_layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
+    layoffs_found = check_layoffs(target_company, layoffs_df)
+    if not layoffs_found.empty:
+        st.warning("⚠️ Layoffs reported recently:")
+        st.dataframe(layoffs_found[['company', 'layoff_date', 'location', 'total_laid_off']])
     else:
         st.success("✅ No layoffs found in recent records.")
 
-    # Step 3: Call AI for verdict
-    if company_info:
-        with st.spinner("Evaluating career move with AI..."):
-            verdict = get_ai_verdict(company_info, company_layoffs, current_company, role)
-            st.subheader("AI Career Move Verdict")
-            st.write(verdict)
+    # Build prompt for summarization
+    prompt = (
+        f"Here's some information about the company {target_company}. "
+        f"The role is {role}. The person currently works at {current_company}. "
+        "Considering the funding stage, layoffs, team size, culture, and growth risks, "
+        "please provide a strategic but friendly advice on whether this is a good career move."
+    )
+
+    # Call Hugging Face summarization model
+    st.subheader("AI Career Move Analysis")
+    analysis = call_hf_summarization(prompt)
+    st.write(analysis)
