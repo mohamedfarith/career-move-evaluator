@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 
-st.title("Career Move Evaluator")
+st.title("📊 Career Move Evaluator")
 
 with st.form("career_form"):
     target_company = st.text_input("Target Company", "Rippling")
@@ -10,8 +10,17 @@ with st.form("career_form"):
     current_company = st.text_input("Your Current Company", "TCS")
     submitted = st.form_submit_button("Evaluate")
 
-if submitted:
-    st.write("Fetching details for:", target_company)
+# Normalize popular company aliases
+aliases = {
+    "meta": "facebook",
+    "fb": "facebook",
+    "x": "twitter",
+    "google": "alphabet",
+    "whatsapp": "facebook",
+    "instagram": "facebook"
+}
+
+lookup_name = aliases.get(target_company.lower(), target_company)
 
 # Function to get company data from Clearbit
 def get_company_info(company_name):
@@ -22,17 +31,6 @@ def get_company_info(company_name):
     else:
         return None
 
-company_info = get_company_info(target_company)
-
-if company_info:
-    st.subheader("Company Info")
-    st.write("**Name:**", company_info["name"])
-    st.write("**Domain:**", company_info["domain"])
-    st.image(company_info["logo"], width=100)
-else:
-    st.error("Could not fetch company info.")
-   
-
 # Function to check layoffs
 @st.cache_data
 def check_layoff_status(company_name):
@@ -40,17 +38,28 @@ def check_layoff_status(company_name):
         url = "https://layoffs.fyi/layoffs.csv"
         df = pd.read_csv(url)
         df['Company'] = df['Company'].str.lower()
-        matches = df[df['Company'].str.contains(company_name.lower())]
+        matches = df[df['Company'].str.lower().str.contains(company_name.lower(), na=False)]
         return matches
     except Exception as e:
         return None
 
-layoffs = check_layoff_status(target_company)
+if submitted:
+    st.write("🔍 Fetching details for:", target_company)
 
-if layoffs is not None and not layoffs.empty:
-    st.warning("⚠️ Layoffs reported")
-    st.dataframe(layoffs[['Company', 'Date', 'Location', 'Laid Off Count']])
-else:
-    st.success("✅ No layoffs found in recent records.")
+    company_info = get_company_info(lookup_name)
 
+    if company_info:
+        st.subheader("🏢 Company Info")
+        st.write("**Name:**", company_info["name"])
+        st.write("**Domain:**", company_info["domain"])
+        st.image(company_info["logo"], width=100)
+    else:
+        st.error("❌ Could not fetch company info.")
 
+    layoffs = check_layoff_status(lookup_name)
+
+    if layoffs is not None and not layoffs.empty:
+        st.warning("⚠️ Layoffs reported")
+        st.dataframe(layoffs[['Company', 'Date', 'Location', 'Laid Off Count']])
+    else:
+        st.success("✅ No layoffs found in recent records.")
