@@ -2,11 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# Set page title
 st.set_page_config(page_title="Career Move Evaluator", layout="centered")
 st.title("🚀 Career Move Evaluator")
 
-# Load layoff data with caching
 @st.cache_data
 def load_layoff_data():
     url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
@@ -20,9 +18,6 @@ def load_layoff_data():
 
 layoffs = load_layoff_data()
 
-# User inputs
-st.subheader("Compare Your Career Move")
-
 company_name = st.text_input("Target Company", "Rippling")
 job_title = st.text_input("Role", "Product Manager")
 current_company = st.text_input("Your Current Company", "TCS")
@@ -35,17 +30,32 @@ def query_llm(prompt):
     try:
         payload = {
             "inputs": prompt,
-            "parameters": {"max_new_tokens": 200, "temperature": 0.7}
+            "parameters": {"max_new_tokens": 200, "temperature": 0.7, "stop": ["\n"]}
         }
         response = requests.post(API_URL, headers=headers, json=payload)
         response.raise_for_status()
         generated = response.json()
         if isinstance(generated, list):
-            return generated[0]["generated_text"].split("###")[-1].strip()
+            full_text = generated[0]["generated_text"]
         elif "generated_text" in generated:
-            return generated["generated_text"].strip()
+            full_text = generated["generated_text"]
         else:
-            return str(generated)
+            full_text = str(generated)
+
+        # Remove the prompt part from the output if echoed
+        if full_text.lower().startswith(prompt.lower()):
+            verdict = full_text[len(prompt):].strip()
+        else:
+            verdict = full_text.strip()
+
+        # Optional: Only take first 2 sentences (simple split)
+        sentences = verdict.split('. ')
+        verdict_short = '. '.join(sentences[:2]).strip()
+        if not verdict_short.endswith('.'):
+            verdict_short += '.'
+
+        return verdict_short
+
     except Exception as e:
         return f"❌ Error from Hugging Face: {e}"
 
@@ -60,12 +70,13 @@ if st.button("Evaluate Move"):
     else:
         st.warning("Layoff data unavailable.")
 
-    # Simplified prompt — keep it short to avoid LLM echoing raw data
-    prompt = f"""
-You are a career advisor. Someone currently works at {current_company} and is considering moving to {company_name} as a {job_title}.
-Based on factors like funding, layoffs, team size, culture, and growth risk, provide a concise (2-3 sentence) verdict:
-Is this a good career move? Answer clearly and supportively, focusing on strategic advice.
-"""
+    prompt = (
+        f"You are a career advisor. Someone currently works at {current_company} "
+        f"and is considering moving to {company_name} as a {job_title}.\n"
+        "Based on funding, layoffs, team size, culture, and growth risk, "
+        "provide a concise 2-3 sentence verdict only: Is this a good career move? "
+        "Answer clearly and supportively, focusing on strategic advice."
+    )
 
     with st.spinner("Analyzing the opportunity..."):
         verdict = query_llm(prompt)
