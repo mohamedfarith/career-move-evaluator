@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import pandas as pd
 
 st.title("Career Move Evaluator")
 
@@ -30,4 +31,26 @@ if company_info:
     st.image(company_info["logo"], width=100)
 else:
     st.error("Could not fetch company info.")
+   
+
+# Function to check layoffs
+@st.cache_data
+def check_layoff_status(company_name):
+    try:
+        url = "https://layoffs.fyi/layoffs.csv"
+        df = pd.read_csv(url)
+        df['Company'] = df['Company'].str.lower()
+        matches = df[df['Company'].str.contains(company_name.lower())]
+        return matches
+    except Exception as e:
+        return None
+
+layoffs = check_layoff_status(target_company)
+
+if layoffs is not None and not layoffs.empty:
+    st.warning("⚠️ Layoffs reported")
+    st.dataframe(layoffs[['Company', 'Date', 'Location', 'Laid Off Count']])
+else:
+    st.success("✅ No layoffs found in recent records.")
+
 
