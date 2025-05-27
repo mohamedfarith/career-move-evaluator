@@ -50,7 +50,7 @@ Is this a good move? Explain clearly and concisely in a supportive but strategic
     def query_llm(prompt):
         API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-alpha"
         headers = {
-            "Authorization": f"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"
+            "Authorization": f"Bearer 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"
         }
         try:
             payload = {
