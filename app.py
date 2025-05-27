@@ -34,11 +34,22 @@ def check_layoff_status(company_name):
     try:
         url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
         df = pd.read_csv(url, encoding='latin1', on_bad_lines='skip')
-
-        # Use correct column names and normalize
-        df['Company'] = df['Company'].astype(str).str.lower().str.strip()
-        matches = df[df['Company'].str.contains(company_name.lower(), na=False)]
-
+        
+        st.write("Columns in layoff dataset:", list(df.columns))  # Debug print columns
+        
+        # Try to guess the company column:
+        company_col = None
+        for col in df.columns:
+            if 'company' in col.lower():
+                company_col = col
+                break
+        
+        if company_col is None:
+            st.error("Could not find company column in dataset.")
+            return None
+        
+        df[company_col] = df[company_col].astype(str).str.lower().str.strip()
+        matches = df[df[company_col].str.contains(company_name.lower(), na=False)]
         return matches
     except Exception as e:
         st.error(f"Error loading layoff data: {e}")
