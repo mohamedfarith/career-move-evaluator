@@ -12,7 +12,7 @@ with st.form("career_form"):
     submitted = st.form_submit_button("Evaluate")
 
 # ===== Hugging Face API Token =====
-HF_API_TOKEN = "hf_your_token_here"  # Replace with your HF API token
+HF_API_TOKEN = "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"  # Replace with your HF API token
 
 # ===== Function to get company info from Clearbit =====
 def get_company_info(company_name):
