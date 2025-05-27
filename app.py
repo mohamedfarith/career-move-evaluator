@@ -67,10 +67,9 @@ if submitted:
     else:
         st.success("✅ No layoffs found in recent records.")
 
-    # Optional debug - show all company names that match
-    st.write("🔎 Debug: Companies matched for layoffs")
-    st.write(layoffs['Company'].unique() if layoffs is not None else "No matches")
-
-    # Optional debug - show a sample of known companies from the CSV
-    st.write("🗂️ Sample from Layoffs.fyi")
-    st.dataframe(pd.read_csv("https://layoffs.fyi/layoffs.csv")[['Company', 'Date']].drop_duplicates().head(20))
+    # Debug output
+    if layoffs is not None:
+        st.write("🔎 Debug: Companies matched for layoffs")
+        st.write(layoffs['Company'].unique())
+    else:
+        st.write("No layoff data matched.")
