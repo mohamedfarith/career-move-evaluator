@@ -31,15 +31,17 @@ def get_company_info(company_name):
     else:
         return None
 
-# Function to check layoffs
+# Function to check layoffs with new dataset
 @st.cache_data
 def check_layoff_status(company_name):
     try:
-        url = "https://github.com/layoffs/layoffs-data/raw/master/layoffs.csv"
+        url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
         df = pd.read_csv(url)
 
-        df['Company'] = df['Company'].astype(str).str.lower().str.strip()
-        matches = df[df['Company'].str.contains(company_name.lower(), na=False)]
+        # Normalize company names in the dataset
+        df['company'] = df['company'].astype(str).str.lower().str.strip()
+
+        matches = df[df['company'].str.contains(company_name.lower(), na=False)]
 
         return matches
     except Exception as e:
@@ -59,17 +61,18 @@ if submitted:
     else:
         st.error("❌ Could not fetch company info.")
 
-    # Layoff Info
+    # Layoff Info from new dataset
     layoffs = check_layoff_status(lookup_name)
     if layoffs is not None and not layoffs.empty:
         st.warning("⚠️ Layoffs reported")
-        st.dataframe(layoffs[['Company', 'Date', 'Location', 'Laid Off Count']])
+        # Adjust these column names based on the dataset
+        st.dataframe(layoffs[['company', 'date', 'location', 'laidoff_count']])
     else:
         st.success("✅ No layoffs found in recent records.")
 
-    # Debug output
+    # Debug output to see matched companies
     if layoffs is not None:
         st.write("🔎 Debug: Companies matched for layoffs")
-        st.write(layoffs['Company'].unique())
+        st.write(layoffs['company'].unique())
     else:
         st.write("No layoff data matched.")
