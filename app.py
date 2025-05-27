@@ -48,7 +48,7 @@ Is this a good move? Explain clearly and concisely in a supportive but strategic
 
     # Call Hugging Face inference API
     def query_llm(prompt):
-        API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-alpha"
+        API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
         headers = {
             "Authorization": f"Bearer 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"
         }
