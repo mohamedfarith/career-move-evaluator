@@ -36,7 +36,7 @@ def check_layoff_status(company_name):
 
 # 3. Hugging Face AI model (free)
 def call_huggingface_ai(prompt):
-    api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+    api_url = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
     headers = {"Authorization": f"Bearer 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"}  # Replace this with your Hugging Face token
     payload = {"inputs": prompt}
 
