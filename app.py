@@ -6,9 +6,9 @@ import openai
 st.title("Career Move Evaluator")
 
 # Hardcode your OpenAI API key here (replace with your actual key)
-OPENAI_API_KEY = "sk-xxxx"  # <-- Replace this with your OpenAI key!
+OPENAI_API_KEY = "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"  # <-- Replace this with your OpenAI key!
 
-openai.api_key = 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
+openai.api_key = OPENAI_API_KEY
 
 with st.form("career_form"):
     target_company = st.text_input("Target Company", "Rippling")
