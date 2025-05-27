@@ -10,7 +10,6 @@ with st.form("career_form"):
     current_company = st.text_input("Your Current Company", "TCS")
     submitted = st.form_submit_button("Evaluate")
 
-# Some common company name aliases to improve lookup
 aliases = {
     "meta": "facebook",
     "fb": "facebook",
@@ -48,17 +47,41 @@ if submitted:
     st.write("🔍 Fetching details for:", target_company)
 
     company_info = get_company_info(lookup_name)
+
+    layoffs = check_layoff_status(lookup_name)
+
     if company_info:
         st.subheader("🏢 Company Info")
         st.write("**Name:**", company_info["name"])
         st.write("**Domain:**", company_info["domain"])
         st.image(company_info["logo"], width=100)
+
+        # Funding info (Clearbit metrics might be empty or missing)
+        funding = None
+        if "metrics" in company_info and "funding" in company_info["metrics"]:
+            try:
+                funding = int(company_info["metrics"]["funding"])
+            except:
+                funding = None
+
+        if funding:
+            st.write(f"💰 **Total Funding:** ${funding:,}")
+        else:
+            st.write("💰 **Total Funding:** Not available")
+
+        # Layoff status + recommendation logic
+        if layoffs is not None and not layoffs.empty:
+            st.warning("⚠️ Layoffs reported")
+            st.dataframe(layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
+            if funding and funding > 10_000_000:
+                st.info("📈 Despite layoffs, recent funding suggests company is investing in growth — use caution but could be opportunity.")
+            else:
+                st.error("⚠️ Layoffs + no significant funding — be cautious about this move.")
+        else:
+            st.success("✅ No layoffs found in recent records.")
+            if funding and funding > 10_000_000:
+                st.success("🚀 Strong funding and no layoffs — good sign for career move!")
+            else:
+                st.info("ℹ️ No layoffs but funding info is limited, consider researching more.")
     else:
         st.error("❌ Could not fetch company info.")
-
-    layoffs = check_layoff_status(lookup_name)
-    if layoffs is not None and not layoffs.empty:
-        st.warning("⚠️ Layoffs reported")
-        st.dataframe(layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
-    else:
-        st.success("✅ No layoffs found in recent records.")
