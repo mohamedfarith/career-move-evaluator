@@ -1,90 +1,77 @@
 import streamlit as st
-import requests
 import pandas as pd
+import requests
 
+# Set page title
 st.set_page_config(page_title="Career Move Evaluator", layout="centered")
-st.title("📊 Career Move Evaluator")
+st.title("🚀 Career Move Evaluator")
 
-# Form for user inputs
-with st.form("career_form"):
-    target_company = st.text_input("🎯 Target Company", "Rippling")
-    role = st.text_input("💼 Role Title", "Product Manager")
-    current_company = st.text_input("🏢 Your Current Company", "TCS")
-    submitted = st.form_submit_button("Evaluate")
-
-# 1. Clearbit API for company info
-def get_company_info(company_name):
-    clearbit_url = f"https://autocomplete.clearbit.com/v1/companies/suggest?query={company_name}"
-    response = requests.get(clearbit_url)
-    if response.status_code == 200 and response.json():
-        return response.json()[0]
-    else:
-        return None
-
-# 2. Layoff dataset from GitHub
+# Load layoff data
 @st.cache_data
-def check_layoff_status(company_name):
+def load_layoff_data():
+    url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
     try:
-        url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
-        df = pd.read_csv(url, encoding='latin1', delimiter=';')
-        df['company'] = df['company'].str.lower()
-        matches = df[df['company'].str.contains(company_name.lower(), na=False)]
-        return matches
+        df = pd.read_csv(url, encoding="ISO-8859-1", sep=";")
+        df.columns = df.columns.str.strip().str.lower()
+        return df
     except Exception as e:
         st.error(f"Error loading layoff data: {e}")
-        return None
+        return pd.DataFrame()
 
-# 3. Hugging Face AI model (free)
-def call_huggingface_ai(prompt):
-    api_url = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-    headers = {"Authorization": f"Bearer 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"}  # Replace this with your Hugging Face token
-    payload = {"inputs": prompt}
+layoffs = load_layoff_data()
 
-    try:
-        response = requests.post(api_url, headers=headers, json=payload)
-        if response.status_code == 200:
-            return response.json()[0]["generated_text"]
+# User inputs
+st.subheader("Compare Your Career Move")
+
+company_name = st.text_input("Target Company", "Rippling")
+job_title = st.text_input("Role", "Product Manager")
+current_company = st.text_input("Your Current Company", "TCS")
+
+if st.button("Evaluate Move"):
+    # Display basic company data if available
+    st.subheader("📉 Layoff Snapshot (if any)")
+    if not layoffs.empty:
+        matched = layoffs[layoffs['company'].str.lower().str.contains(company_name.lower())]
+        if not matched.empty:
+            st.dataframe(matched[['company', 'layoff_date', 'location', 'total_laid_off']].drop_duplicates().head(5))
         else:
-            st.error(f"❌ Error from Hugging Face: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
-        st.error(f"❌ API call failed: {e}")
-        return None
-
-# Run evaluation logic
-if submitted:
-    st.markdown("---")
-    st.subheader("🔍 Company Overview")
-    company_info = get_company_info(target_company)
-
-    if company_info:
-        st.write("**Name:**", company_info["name"])
-        st.write("**Domain:**", company_info["domain"])
-        st.image(company_info["logo"], width=100)
+            st.info("No layoff data found for that company.")
     else:
-        st.error("Company details not found.")
+        st.warning("Layoff data unavailable.")
 
-    st.markdown("---")
-    st.subheader("📉 Layoff Records")
-    layoffs = check_layoff_status(target_company)
+    # AI Prompt
+    prompt = f"""
+The person currently works at {current_company}. Here's some information about the company {company_name}. The role is {job_title}.
+Based on funding, layoffs, team size, culture, and growth risk, give a short (2–3 sentence) verdict:
+Is this a good move? Explain clearly and concisely in a supportive but strategic tone.
+"""
 
-    if layoffs is not None and not layoffs.empty:
-        st.warning("⚠️ Recent layoffs reported")
-        st.dataframe(layoffs[['company', 'layoff_date', 'location', 'total_laid_off']])
-    else:
-        st.success("✅ No layoffs found in public records.")
+    # Call Hugging Face inference API
+    def query_llm(prompt):
+        API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-alpha"
+        headers = {
+            "Authorization": f"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"
+        }
+        try:
+            payload = {
+                "inputs": prompt,
+                "parameters": {"max_new_tokens": 300, "temperature": 0.7}
+            }
+            response = requests.post(API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            generated = response.json()
+            if isinstance(generated, list):
+                return generated[0]["generated_text"].split("###")[-1].strip()
+            elif "generated_text" in generated:
+                return generated["generated_text"].strip()
+            else:
+                return str(generated)
+        except Exception as e:
+            return f"❌ Error from Hugging Face: {e}"
 
-    st.markdown("---")
-    st.subheader("🤖 AI Career Move Verdict")
+    # Show spinner while LLM processes
+    with st.spinner("Analyzing the opportunity..."):
+        verdict = query_llm(prompt)
 
-    ai_prompt = (
-        f"The person currently works at {current_company}. "
-        f"Here's some information about the company {target_company}. "
-        f"The role is {role}. "
-        f"Considering the funding stage, layoffs, team size, culture, and growth risks, "
-        f"please provide a strategic but friendly advice on whether this is a good career move."
-    )
-
-    verdict = call_huggingface_ai(ai_prompt)
-    if verdict:
-        st.success(verdict)
+    st.subheader("🤖 AI Verdict")
+    st.write(verdict)
