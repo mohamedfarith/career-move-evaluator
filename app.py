@@ -31,12 +31,12 @@ def get_company_info(company_name):
     else:
         return None
 
-# Function to check layoffs with new dataset
+# Function to check layoffs with new dataset and encoding fix
 @st.cache_data
 def check_layoff_status(company_name):
     try:
         url = "https://raw.githubusercontent.com/m0rningLight/Data_Analysis--Layoffs_Dataset/main/data/layoffs_cleaned.csv"
-        df = pd.read_csv(url)
+        df = pd.read_csv(url, encoding='latin1', on_bad_lines='skip')
 
         # Normalize company names in the dataset
         df['company'] = df['company'].astype(str).str.lower().str.strip()
