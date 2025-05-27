@@ -30,35 +30,17 @@ def query_llm(prompt):
     try:
         payload = {
             "inputs": prompt,
-            "parameters": {"max_new_tokens": 200, "temperature": 0.7, "stop": ["\n"]}
+            "parameters": {"max_new_tokens": 300, "temperature": 0.7}
         }
-        # Set a timeout to avoid hanging
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=20)
+        response = requests.post(API_URL, headers=headers, json=payload)
         response.raise_for_status()
         generated = response.json()
         if isinstance(generated, list):
-            full_text = generated[0].get("generated_text", "")
+            return generated[0]["generated_text"].split("###")[-1].strip()
         elif "generated_text" in generated:
-            full_text = generated["generated_text"]
+            return generated["generated_text"].strip()
         else:
-            full_text = str(generated)
-
-        # Clean output by removing repeated prompt if present
-        if full_text.lower().startswith(prompt.lower()):
-            verdict = full_text[len(prompt):].strip()
-        else:
-            verdict = full_text.strip()
-
-        # Limit to first 2 sentences
-        sentences = verdict.split('. ')
-        verdict_short = '. '.join(sentences[:2]).strip()
-        if not verdict_short.endswith('.'):
-            verdict_short += '.'
-
-        return verdict_short
-
-    except requests.exceptions.Timeout:
-        return "❌ Request timed out. Please try again."
+            return str(generated)
     except Exception as e:
         return f"❌ Error from Hugging Face: {e}"
 
@@ -73,15 +55,14 @@ if st.button("Evaluate Move"):
     else:
         st.warning("Layoff data unavailable.")
 
-    prompt = (
-        f"You are a career advisor. Someone currently works at {current_company} "
-        f"and is considering moving to {company_name} as a {job_title}.\n"
-        "Based on funding, layoffs, team size, culture, and growth risk, "
-        "provide a concise 2-3 sentence verdict only: Is this a good career move? "
-        "Answer clearly and supportively, focusing on strategic advice."
-    )
+    prompt = f"""
+You are a career advisor. Someone currently works at {current_company} and is considering moving to {company_name} as a {job_title}.
+Based on funding, layoffs, team size, culture, and growth risk, give a short (2-3 sentence) verdict:
+Is this a good career move? Explain clearly and concisely in a supportive but strategic tone.
+"""
 
-    with st.spinner("Analyzing the opportunity..."):
+    # Use Streamlit spinner context manager for better user feedback
+    with st.spinner("Analyzing the opportunity... Please wait."):
         verdict = query_llm(prompt)
 
     st.subheader("🤖 AI Verdict")
