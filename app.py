@@ -32,23 +32,24 @@ def query_llm(prompt):
             "inputs": prompt,
             "parameters": {"max_new_tokens": 200, "temperature": 0.7, "stop": ["\n"]}
         }
-        response = requests.post(API_URL, headers=headers, json=payload)
+        # Set a timeout to avoid hanging
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
         generated = response.json()
         if isinstance(generated, list):
-            full_text = generated[0]["generated_text"]
+            full_text = generated[0].get("generated_text", "")
         elif "generated_text" in generated:
             full_text = generated["generated_text"]
         else:
             full_text = str(generated)
 
-        # Remove the prompt part from the output if echoed
+        # Clean output by removing repeated prompt if present
         if full_text.lower().startswith(prompt.lower()):
             verdict = full_text[len(prompt):].strip()
         else:
             verdict = full_text.strip()
 
-        # Optional: Only take first 2 sentences (simple split)
+        # Limit to first 2 sentences
         sentences = verdict.split('. ')
         verdict_short = '. '.join(sentences[:2]).strip()
         if not verdict_short.endswith('.'):
@@ -56,6 +57,8 @@ def query_llm(prompt):
 
         return verdict_short
 
+    except requests.exceptions.Timeout:
+        return "❌ Request timed out. Please try again."
     except Exception as e:
         return f"❌ Error from Hugging Face: {e}"
 
